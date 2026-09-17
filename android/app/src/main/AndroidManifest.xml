@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Speaking practice (US-080). Recording is on-device: the audio goes to
+         the platform recogniser, not to a Lango server. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="lango"
         android:name="${applicationName}"
@@ -45,6 +48,12 @@
         <!-- Required by flutter_tts to discover TTS engines on Android 11+ -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
+        <!-- Required by speech_to_text to discover the speech recogniser on
+             Android 11+. Without it, initialize() reports "not available" on
+             a device that does have one. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

@@ -1,7 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- The INTERNET permission is required for development. Specifically,
-         the Flutter tool needs it to communicate with the running application
-         to allow setting breakpoints, to provide hot reload, etc.
-    -->
-    <uses-permission android:name="android.permission.INTERNET"/>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <!-- Debug-only overlay. Gradle merges src/debug into debug builds only, so
+         nothing here can reach a release APK.
+
+         Android 9+ blocks cleartext HTTP. A TTS service running on the
+         developer's machine is plain HTTP, and the emulator reaches the host
+         at 10.0.2.2 — so debug builds get a narrow exemption for exactly those
+         addresses. Every other host still requires TLS, in debug as well. -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:replace="android:networkSecurityConfig" />
 </manifest>

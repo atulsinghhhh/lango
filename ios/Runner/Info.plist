@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Lango records your voice so you can practise saying sentences out loud. Recording is handled by your device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Lango turns your speech into text so it can show you which words came through. It does not score your pronunciation.</string>
 </dict>
 </plist>

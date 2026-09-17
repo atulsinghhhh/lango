@@ -12,6 +12,15 @@ dependencies:
   flutter_riverpod: ^3.4.3
   flutter_tts: ^4.2.5
   go_router: ^18.0.1
+  http: ^1.2.0
+  # Plays the MP3 the TTS service returns. flutter_tts synthesises on-device
+  # and cannot play a URL, so a real audio player is a separate concern.
+  just_audio: ^0.9.40
+  # On-device speech recognition for speaking practice (US-080). Uses the
+  # platform recogniser (iOS Speech / Android SpeechRecognizer) — no server,
+  # no API key. It returns a transcript and the engine's own confidence in
+  # that transcript, which is not a pronunciation score (US-081).
+  speech_to_text: ^7.0.0
   supabase_flutter: ^2.17.2
 
 dev_dependencies:
