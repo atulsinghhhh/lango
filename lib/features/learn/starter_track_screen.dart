@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../models/content.dart';
 import '../../models/language.dart';
 import '../../services/learn/starter_track.dart';
 import '../../services/providers.dart';
@@ -254,7 +255,7 @@ class _StepCard extends StatelessWidget {
           builder: (_) => CharacterSetScreen(
             language: language,
             script: script,
-            title: step.title.replaceFirst('Learn ', ''),
+            title: scriptLabel(script),
           ),
         ),
       );

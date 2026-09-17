@@ -162,3 +162,36 @@ class CharacterItem {
     };
   }
 }
+
+/// Script codes, as stored in `characters.script`, to words a learner
+/// recognises.
+///
+/// Shared rather than declared per screen, because the same script is named in
+/// the writing browser, the beginner path and the practice screen, and three
+/// copies drift. Unknown codes fall through to the code itself tidied up, so a
+/// script added to the catalog tomorrow still renders without a code change.
+const _scriptNames = <String, ({String heading, String standalone})>{
+  'hangul_consonant': (heading: 'Consonants', standalone: 'Hangul consonants'),
+  'hangul_vowel': (heading: 'Vowels', standalone: 'Hangul vowels'),
+  'hiragana': (heading: 'Hiragana', standalone: 'Hiragana'),
+  'katakana': (heading: 'Katakana', standalone: 'Katakana'),
+  'kanji': (heading: 'Kanji', standalone: 'Kanji'),
+};
+
+/// Short form, for use where the language and writing system are already
+/// obvious from the surrounding screen — "Consonants" under a Korean heading.
+String scriptHeading(String script) =>
+    _scriptNames[script]?.heading ?? _tidyScriptCode(script);
+
+/// Full form, for use on its own — "Hangul consonants" in a list that also
+/// contains Japanese.
+String scriptLabel(String script) =>
+    _scriptNames[script]?.standalone ?? _tidyScriptCode(script);
+
+/// `hangul_consonant` → `Hangul consonant`. Only reached for a script the map
+/// does not know, which is better than showing a raw snake_case code.
+String _tidyScriptCode(String script) {
+  if (script.isEmpty) return script;
+  final spaced = script.replaceAll('_', ' ');
+  return spaced[0].toUpperCase() + spaced.substring(1);
+}

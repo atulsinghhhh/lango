@@ -15,16 +15,6 @@ final charactersProvider = FutureProvider.autoDispose
   return ref.watch(contentServiceProvider).characters(language, limit: 500);
 });
 
-/// Script codes, as stored, to the heading a learner recognises. Unknown codes
-/// fall through to the raw code, so a new script still renders.
-const _scriptLabels = {
-  'hangul_consonant': 'Consonants',
-  'hangul_vowel': 'Vowels',
-  'hiragana': 'Hiragana',
-  'katakana': 'Katakana',
-  'kanji': 'Kanji',
-};
-
 /// Above this many characters a script gets a preview plus its own screen
 /// instead of a grid that buries everything under it (US-061: a kanji set is
 /// far larger than an alphabet).
@@ -105,7 +95,7 @@ class CharactersScreen extends ConsumerWidget {
                     for (final entry in byScript.entries) ...[
                       _ScriptSection(
                         script: entry.key,
-                        title: _scriptLabels[entry.key] ?? entry.key,
+                        title: scriptHeading(entry.key),
                         characters: entry.value,
                         language: language,
                       ),

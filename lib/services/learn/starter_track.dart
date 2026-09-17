@@ -12,6 +12,7 @@
 /// `test/starter_track_test.dart` rather than discovered in the UI.
 library;
 
+import '../../models/content.dart';
 import '../../models/language.dart';
 
 /// What a step asks the learner to do. The kind drives the icon and the route;
@@ -239,8 +240,8 @@ class StarterTrack {
       for (final script in foundation)
         _Draft(
           kind: StarterStepKind.script,
-          title: 'Learn ${_scriptLabel(script.script)}',
-          purpose: _scriptPurpose(script.script, foundation),
+          title: 'Learn ${scriptLabel(script.script)}',
+          purpose: _scriptPurpose(script.script),
           route: '/learn/writing',
           script: script.script,
           progress: script.fraction,
@@ -336,33 +337,31 @@ class StarterTrack {
     return StarterTrackPlan(steps: steps);
   }
 
-  /// Display name of a script. Falls back to the raw value capitalised, so a
-  /// script added to the catalog tomorrow renders sensibly with no code
-  /// change.
-  static String _scriptLabel(String script) => switch (script) {
-        'hangul' => 'Hangul',
-        'hiragana' => 'Hiragana',
-        'katakana' => 'Katakana',
-        'kanji' => 'Kanji',
-        _ => script.isEmpty
-            ? script
-            : script[0].toUpperCase() + script.substring(1),
-      };
+  /// Why this script, and why here.
+  ///
+  /// Keyed on the stored script code, because the honest thing to say about
+  /// an alphabet of ten vowels is not the thing to say about a syllabary of
+  /// forty-six. Anything unknown gets the generic line rather than silence.
+  static const _scriptPurposes = <String, String>{
+    'hangul_consonant':
+        'Fourteen consonants, and the whole reason Korean is quick to start: '
+            'Hangul was designed to be learned, not inherited, and the shapes '
+            'echo how your mouth makes the sound.',
+    'hangul_vowel':
+        'Ten vowels. Put them next to the consonants you just learned and '
+            'Korean syllables come apart into pieces you can read.',
+    'hiragana':
+        'Forty-six characters covering every sound in the language. This is '
+            'the one that makes Japanese stop being shapes.',
+    'katakana':
+        'The second syllabary — the same sounds in different shapes, used for '
+            'words borrowed from other languages. Plenty of them are English.',
+  };
 
-  static String _scriptPurpose(
-      String script, List<ScriptProgress> foundation) {
-    final label = _scriptLabel(script);
-    if (foundation.length > 1 && script == foundation.first.script) {
-      return 'The alphabet everything else is written in. Learn $label first '
-          'and the rest of the app stops being shapes.';
-    }
-    if (script == 'katakana') {
-      return 'The second syllabary — same sounds, different shapes, used for '
-          'words borrowed from other languages.';
-    }
-    return '$label is an alphabet, not a set of pictures: each letter is a '
-        'sound, and a few dozen of them cover the whole language.';
-  }
+  static String _scriptPurpose(String script) =>
+      _scriptPurposes[script] ??
+      '${scriptLabel(script)} is a set of sounds, not a set of pictures: '
+          'learn the characters and you can read anything written in them.';
 
   static String? _scriptHint(ScriptProgress script) {
     final target = (script.total * scriptReadyFraction).ceil();

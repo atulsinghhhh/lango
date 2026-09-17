@@ -5,20 +5,32 @@ import 'package:lango/services/learn/starter_track.dart';
 void main() {
   const track = StarterTrack();
 
-  /// Hangul-sized alphabet: one foundational script, forty characters.
-  ScriptProgress hangul({int learned = 0, int total = 40}) =>
-      ScriptProgress(script: 'hangul', learned: learned, total: total);
+  // Sizes and script codes match the seeded catalog: Korean stores its
+  // alphabet as two scripts (14 consonants, 10 vowels), Japanese as two
+  // syllabaries of 46 plus a levelled kanji set. Fixtures that drift from the
+  // real content would test a catalog nobody has.
+  ScriptProgress consonants({int learned = 0, int total = 14}) => ScriptProgress(
+        script: 'hangul_consonant',
+        learned: learned,
+        total: total,
+      );
+
+  ScriptProgress vowels({int learned = 0, int total = 10}) =>
+      ScriptProgress(script: 'hangul_vowel', learned: learned, total: total);
 
   ScriptProgress kana(String script, {int learned = 0, int total = 46}) =>
       ScriptProgress(script: script, learned: learned, total: total);
 
   /// Kanji: levelled, so it is not part of the foundation.
-  ScriptProgress kanji({int learned = 0, int total = 80}) => ScriptProgress(
+  ScriptProgress kanji({int learned = 0, int total = 50}) => ScriptProgress(
         script: 'kanji',
         learned: learned,
         total: total,
         isLevelled: true,
       );
+
+  /// A single finished script, for tests about the steps after the alphabet.
+  ScriptProgress scriptDone() => consonants(learned: 14);
 
   StarterSnapshot snapshot({
     TargetLanguage language = TargetLanguage.korean,
@@ -34,7 +46,7 @@ void main() {
       StarterSnapshot(
         language: language,
         level: level,
-        scripts: scripts ?? [hangul()],
+        scripts: scripts ?? [consonants()],
         vocabularyTracked: vocabularyTracked,
         grammarTracked: grammarTracked,
         hasListened: hasListened,
@@ -45,7 +57,7 @@ void main() {
 
   /// A learner who has finished everything, used to test the tail of the path.
   StarterSnapshot finished({List<ScriptProgress>? scripts}) => snapshot(
-        scripts: scripts ?? [hangul(learned: 40)],
+        scripts: scripts ?? [scriptDone()],
         vocabularyTracked: StarterTrack.firstWordsTarget,
         grammarTracked: StarterTrack.firstGrammarTarget,
         hasListened: true,
@@ -58,7 +70,7 @@ void main() {
     test('the alphabet comes first', () {
       final plan = track.plan(snapshot());
       expect(plan.steps.first.kind, StarterStepKind.script);
-      expect(plan.steps.first.script, 'hangul');
+      expect(plan.steps.first.script, 'hangul_consonant');
     });
 
     test('every learning mode appears exactly once', () {
@@ -130,12 +142,12 @@ void main() {
     });
 
     test('exactly one step is current', () {
-      final plan = track.plan(snapshot(scripts: [hangul(learned: 20)]));
+      final plan = track.plan(snapshot(scripts: [consonants(learned: 7)]));
       expect(plan.steps.where((s) => s.isCurrent).length, 1);
     });
 
     test('finishing the script moves the path on to words', () {
-      final plan = track.plan(snapshot(scripts: [hangul(learned: 40)]));
+      final plan = track.plan(snapshot(scripts: [scriptDone()]));
       expect(plan.steps.first.isDone, isTrue);
       expect(plan.current?.kind, StarterStepKind.vocabulary);
     });
@@ -158,7 +170,7 @@ void main() {
     });
 
     test('progress is the share of steps done', () {
-      final plan = track.plan(snapshot(scripts: [hangul(learned: 40)]));
+      final plan = track.plan(snapshot(scripts: [scriptDone()]));
       expect(plan.doneCount, 1);
       expect(plan.fraction, closeTo(1 / plan.steps.length, 0.0001));
     });
@@ -166,14 +178,14 @@ void main() {
 
   group('the script threshold', () {
     test('most of the alphabet is enough to move on', () {
-      final learned = (40 * StarterTrack.scriptReadyFraction).ceil();
-      final plan = track.plan(snapshot(scripts: [hangul(learned: learned)]));
+      final learned = (14 * StarterTrack.scriptReadyFraction).ceil();
+      final plan = track.plan(snapshot(scripts: [consonants(learned: learned)]));
       expect(plan.steps.first.isDone, isTrue);
     });
 
     test('one short of the threshold is not', () {
-      final learned = (40 * StarterTrack.scriptReadyFraction).ceil() - 1;
-      final plan = track.plan(snapshot(scripts: [hangul(learned: learned)]));
+      final learned = (14 * StarterTrack.scriptReadyFraction).ceil() - 1;
+      final plan = track.plan(snapshot(scripts: [consonants(learned: learned)]));
       expect(plan.steps.first.isDone, isFalse);
     });
 
@@ -190,7 +202,7 @@ void main() {
   group('thresholds for the other steps', () {
     test('words count toward the first-words step', () {
       final plan = track.plan(snapshot(
-        scripts: [hangul(learned: 40)],
+        scripts: [scriptDone()],
         vocabularyTracked: StarterTrack.firstWordsTarget,
       ));
       final vocab =
@@ -200,7 +212,7 @@ void main() {
 
     test('one word short is not done', () {
       final plan = track.plan(snapshot(
-        scripts: [hangul(learned: 40)],
+        scripts: [scriptDone()],
         vocabularyTracked: StarterTrack.firstWordsTarget - 1,
       ));
       final vocab =
@@ -230,9 +242,9 @@ void main() {
 
   group('hints', () {
     test('the current step says what would finish it', () {
-      final plan = track.plan(snapshot(scripts: [hangul(learned: 10)]));
-      expect(plan.current!.nextHint, contains('22'),
-          reason: '80% of 40 is 32, and 32 - 10 = 22 still to start');
+      final plan = track.plan(snapshot(scripts: [consonants(learned: 4)]));
+      expect(plan.current!.nextHint, contains('8'),
+          reason: '80% of 14 rounds up to 12, and 12 - 4 = 8 still to start');
     });
 
     test('only the current step carries a hint', () {
@@ -243,8 +255,8 @@ void main() {
     });
 
     test('a hint for one remaining item reads in the singular', () {
-      final learned = (40 * StarterTrack.scriptReadyFraction).ceil() - 1;
-      final plan = track.plan(snapshot(scripts: [hangul(learned: learned)]));
+      final learned = (14 * StarterTrack.scriptReadyFraction).ceil() - 1;
+      final plan = track.plan(snapshot(scripts: [consonants(learned: learned)]));
       expect(plan.current!.nextHint, contains('1 more character'));
     });
   });
@@ -278,12 +290,52 @@ void main() {
 
   group('determinism', () {
     test('the same snapshot always produces the same path', () {
-      final a = track.plan(snapshot(scripts: [hangul(learned: 12)]));
-      final b = track.plan(snapshot(scripts: [hangul(learned: 12)]));
+      final a = track.plan(snapshot(scripts: [consonants(learned: 5)]));
+      final b = track.plan(snapshot(scripts: [consonants(learned: 5)]));
       expect(
         a.steps.map((s) => '${s.kind}:${s.state}'),
         b.steps.map((s) => '${s.kind}:${s.state}'),
       );
+    });
+  });
+
+  group('the catalog as it is actually seeded', () {
+    test('Korean gets a step for consonants and one for vowels, in order', () {
+      final plan = track.plan(snapshot(scripts: [consonants(), vowels()]));
+      final scripts =
+          plan.steps.where((s) => s.script != null).map((s) => s.script);
+      expect(scripts, ['hangul_consonant', 'hangul_vowel']);
+    });
+
+    test('script steps name the writing system, not the raw code', () {
+      final plan = track.plan(snapshot(scripts: [consonants(), vowels()]));
+      expect(plan.steps[0].title, 'Learn Hangul consonants');
+      expect(plan.steps[1].title, 'Learn Hangul vowels');
+      expect(plan.steps.map((s) => s.title).join(), isNot(contains('_')));
+    });
+
+    test('Japanese gets both syllabaries and no kanji', () {
+      final plan = track.plan(snapshot(
+        language: TargetLanguage.japanese,
+        scripts: [kana('hiragana'), kana('katakana'), kanji()],
+      ));
+      expect(plan.steps[0].title, 'Learn Hiragana');
+      expect(plan.steps[1].title, 'Learn Katakana');
+      expect(plan.steps.map((s) => s.script), isNot(contains('kanji')));
+    });
+
+    test('vowels wait for consonants', () {
+      final plan = track.plan(snapshot(scripts: [consonants(), vowels()]));
+      expect(plan.steps[0].isCurrent, isTrue);
+      expect(plan.steps[1].isLocked, isTrue);
+    });
+
+    test('a script the labels do not know still reads as words', () {
+      final plan = track.plan(snapshot(scripts: [
+        const ScriptProgress(script: 'cyrillic_soft', learned: 0, total: 8),
+      ]));
+      expect(plan.steps.first.title, 'Learn Cyrillic soft');
+      expect(plan.steps.first.purpose, isNotEmpty);
     });
   });
 }
