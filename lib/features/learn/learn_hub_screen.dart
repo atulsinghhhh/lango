@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../models/language.dart';
+import '../../services/learn/starter_track.dart';
 import '../../services/providers.dart';
 import '../../widgets/lango_card.dart';
 import '../../widgets/lango_page.dart';
@@ -36,6 +37,7 @@ class LearnHubScreen extends ConsumerWidget {
     }
 
     final skills = _skillsFor(lang);
+    final track = ref.watch(starterTrackProvider(lang.code)).value;
 
     return LangoPage(
       title: 'Learn',
@@ -53,8 +55,19 @@ class LearnHubScreen extends ConsumerWidget {
             LanguageSwitcher(languages: languages),
             const Gap.xl(),
           ],
+          // Offered before the skill grid, because a complete beginner
+          // choosing from eight equal cards is the problem this solves. It
+          // disappears once every step is done. While it loads, nothing is
+          // drawn rather than a skeleton: the hub's own content is already on
+          // screen, and a placeholder that pushes it down reads as a fault.
+          if (track != null && !track.isComplete) ...[
+            _StartHereCard(plan: track, language: lang),
+            const Gap.card(),
+          ],
           Text(
-            'What would you like to practise?',
+            track != null && !track.isComplete
+                ? 'Or pick something yourself'
+                : 'What would you like to practise?',
             style: LangoType.h2,
           ),
           const Gap.xl(),
@@ -100,6 +113,69 @@ class LearnHubScreen extends ConsumerWidget {
           '/learn/dictation'),
       _Skill('Speaking', 'Say it out loud', Icons.mic_rounded, '/speaking'),
     ];
+  }
+}
+
+/// The entry point to the guided path (see [StarterTrackScreen]).
+///
+/// Names the next step rather than saying "start here", so the card answers
+/// the question instead of promising an answer one tap away.
+class _StartHereCard extends StatelessWidget {
+  const _StartHereCard({required this.plan, required this.language});
+
+  final StarterTrackPlan plan;
+  final TargetLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final step = plan.current;
+    final total = plan.steps.length;
+
+    return LangoCard.tinted(
+      tint: LangoColors.tints.first,
+      semanticLabel: 'Start here. Step ${plan.doneCount + 1} of $total: '
+          '${step?.title ?? ''}',
+      onTap: () => context.push('/learn/start?lang=${language.code}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('NEW TO ${language.label.toUpperCase()}?',
+              style: LangoType.caption.copyWith(
+                color: LangoColors.primaryDeep,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              )),
+          const Gap.xs(),
+          Text(step?.title ?? 'Start here', style: LangoType.h2),
+          const Gap.xxs(),
+          Text(
+            'Step ${plan.doneCount + 1} of $total on the guided path.',
+            style: LangoType.body.copyWith(
+              color: LangoColors.foregroundSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const Gap.md(),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(LangoRadius.sm),
+                  child: LinearProgressIndicator(
+                    value: plan.fraction,
+                    minHeight: 8,
+                    backgroundColor: LangoPalette.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: LangoSpace.sm),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: LangoColors.primaryDeep, size: 22),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

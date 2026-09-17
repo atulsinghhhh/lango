@@ -12,6 +12,7 @@ import 'features/compare/compare_detail_screen.dart';
 import 'features/compare/compare_screen.dart';
 import 'features/dashboard/home_gate.dart';
 import 'features/learn/learn_hub_screen.dart';
+import 'features/learn/starter_track_screen.dart';
 import 'features/shell/app_shell.dart';
 import 'features/speaking/speaking_screen.dart';
 import 'features/tutor/tutor_chat_screen.dart';
@@ -83,6 +84,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
               path: '/learn',
               builder: (_, _) => const LearnHubScreen(),
               routes: [
+                GoRoute(
+                  path: 'start',
+                  builder: (_, state) =>
+                      StarterTrackScreen(language: _lang(state)),
+                ),
                 GoRoute(
                   path: 'vocabulary',
                   builder: (_, state) => VocabListScreen(language: _lang(state)),

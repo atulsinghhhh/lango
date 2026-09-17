@@ -52,8 +52,17 @@ scope, priority order). Read them before architectural decisions.
   - `TutorCorrection` is only stored when it is usable; the tutor is instructed
     not to invent a correction for a correct turn.
 - The pure engines stay pure and tested: `SrsEngine`, `ExerciseGenerator`,
-  `SpeechComparison`/`DictationChecker`, `RecommendationEngine`. No I/O, no
-  clock, no platform calls — callers pass what they need in.
+  `SpeechComparison`/`DictationChecker`, `RecommendationEngine`,
+  `StarterTrack`. No I/O, no clock, no platform calls — callers pass what they
+  need in.
+- The beginner path (`lib/services/learn/starter_track.dart`) orders the
+  existing modes; it never gates them. A "locked" step means "not recommended
+  yet" — the Learn hub still opens every screen directly. Step completion is
+  measured from recorded activity, never from a "finished the tutorial" flag,
+  so a learner who reinstalls is met where they actually are. Which scripts
+  form the foundation is read from the data: a script with no `level_label` on
+  any row is an alphabet to finish, a levelled one (kanji) is not. No
+  per-language branch.
 - `tutor_messages` and `speaking_attempts` are insert+select only, like
   `review_events`. What was said is not rewritable from the client.
 - TTS caching is keyed on everything that can change the audio (model version,

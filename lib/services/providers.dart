@@ -11,6 +11,8 @@ import 'comparison_service.dart';
 import 'content_service.dart';
 import 'history_service.dart';
 import 'insights_service.dart';
+import 'learn/starter_track.dart';
+import 'learn/starter_track_service.dart';
 import 'profile_service.dart';
 import 'progress_service.dart';
 import 'recommend/recommendation_engine.dart';
@@ -85,6 +87,11 @@ final speechServiceProvider = Provider((ref) => SpeechService());
 
 final recommendationEngineProvider =
     Provider((ref) => const RecommendationEngine());
+
+final starterTrackServiceProvider =
+    Provider((ref) => StarterTrackService(ref.watch(supabaseProvider)));
+
+final starterTrackEngineProvider = Provider((ref) => const StarterTrack());
 
 /// Current profile incl. selected languages. Invalidate after onboarding or
 /// settings changes.
@@ -188,4 +195,28 @@ final recommendationProvider =
         (ref, language) async {
   final snapshot = await ref.watch(learnerSnapshotProvider(language).future);
   return ref.watch(recommendationEngineProvider).recommend(snapshot);
+});
+
+/// The guided beginner path for a language, or null when the learner is not
+/// its audience.
+///
+/// Null rather than an empty plan, so the Learn hub has one thing to check:
+/// an intermediate learner gets no card, and neither does a beginner studying
+/// a language whose catalog has no writing system yet.
+final starterTrackProvider =
+    FutureProvider.autoDispose.family<StarterTrackPlan?, String>(
+        (ref, language) async {
+  final profile = await ref.watch(profileProvider.future);
+  final target = TargetLanguage.fromCode(language);
+  final userLanguage = profile?.languages
+      .cast<UserLanguage?>()
+      .firstWhere((l) => l?.language == target, orElse: () => null);
+  if (userLanguage == null) return null;
+
+  final snapshot =
+      await ref.watch(starterTrackServiceProvider).snapshot(userLanguage);
+  if (!snapshot.wantsGuidance) return null;
+
+  final plan = ref.watch(starterTrackEngineProvider).plan(snapshot);
+  return plan.isEmpty ? null : plan;
 });
