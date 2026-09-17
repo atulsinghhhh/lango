@@ -1,0 +1,18 @@
+# MagpieTTS inference. Needs a CUDA-capable machine.
+#
+# Per the model card for nvidia/magpie_tts_multilingual_357m:
+#   pip install nemo_toolkit[tts]@main
+#   plus kaldialign
+#
+# Requires Python >= 3.10.12 and < 3.14 — NeMo's dependency tree does not
+# resolve on 3.14. Use 3.12 unless you have a reason not to.
+#
+# Torch is installed in the Dockerfile from the CUDA index so the build gets a
+# GPU wheel rather than the CPU default.
+nemo_toolkit[tts] @ git+https://github.com/NVIDIA/NeMo.git@main
+kaldialign
+
+# Imported by nemo.collections.speechlm2, which the TTS model package pulls in,
+# but not declared by the [tts] extra. Without it the import chain dies with
+# `ModuleNotFoundError: No module named 'peft'` before the model ever loads.
+peft

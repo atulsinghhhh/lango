@@ -1,0 +1,47 @@
+[project]
+name = "lango-tts"
+version = "1.0.0"
+description = "Speech synthesis for Lango, backed by NVIDIA MagpieTTS Multilingual 357M."
+# The model card requires >= 3.10.12. The upper bound is not cosmetic: NeMo's
+# dependency tree (numba and friends) caps at < 3.14, so a 3.14 interpreter
+# fails to resolve `nemo_toolkit[tts]` at all. 3.12 is what this was built
+# against.
+requires-python = ">=3.10.12,<3.14"
+
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "httpx>=0.27",
+  "pyjwt[crypto]>=2.8",
+  "soundfile>=0.12",
+  "numpy>=1.26",
+  "prometheus-client>=0.20",
+]
+
+[project.optional-dependencies]
+# Kept out of the base install so the API, its tests and the OpenAPI schema can
+# be worked on without pulling NeMo and CUDA onto a laptop.
+# `nemo_toolkit[tts]` must come from main per the model card; `kaldialign` is
+# listed there as a separate requirement.
+model = [
+  "nemo_toolkit[tts] @ git+https://github.com/NVIDIA/NeMo.git@main",
+  "kaldialign",
+  "torch>=2.4",
+]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "anyio>=4.4",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "gpu: needs a CUDA device and the real model; skipped otherwise",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

@@ -1,0 +1,11 @@
+# Runtime for the API process. The model itself is installed separately (see
+# requirements-model.txt) so this file stays installable on a laptop.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+httpx>=0.27
+pyjwt[crypto]>=2.8
+soundfile>=0.12
+numpy>=1.26
+prometheus-client>=0.20
