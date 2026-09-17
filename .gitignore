@@ -52,6 +52,25 @@ app.*.map.json
 # Design reference (third-party copyrighted work — kept local, never published)
 /asset/
 /asesst/
+REFERENCE_ANALYSIS.md
+UI_AUDIT.md
+
 
 # Scratch
 *.log
+
+# TTS service (services/tts)
+services/tts/.venv/
+services/tts/.venv-model/
+services/tts/.pytest_cache/
+**/__pycache__/
+*.pyc
+# Never commit a filled-in environment file: it holds the Supabase
+# service-role key and the TTS API key.
+.env
+.env.*
+!.env.example
+services/tts/.env
+
+# Supabase CLI local state (linked project ref, pooler URL, version pins)
+**/supabase/.temp/
