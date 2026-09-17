@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../models/insights.dart';
 import '../../models/language.dart';
 import '../../models/profile.dart';
 import '../../services/progress_service.dart';
@@ -173,6 +175,15 @@ class ProgressScreen extends ConsumerWidget {
           Text('Skills', style: LangoType.h3),
           const Gap.md(),
           _SkillMap(language: lang),
+          const Gap.xxl(),
+          _WeakAreas(language: lang),
+          const Gap.xxl(),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.history_rounded),
+            label: const Text('See your full history'),
+            onPressed: () =>
+                context.push('/progress/history?lang=${lang.code}'),
+          ),
         ],
       ),
     );
@@ -408,4 +419,107 @@ class _SkillRow extends StatelessWidget {
 
   String _titleCase(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+}
+
+
+/// Weak areas (US-100).
+///
+/// Only categories with enough graded attempts appear — a category the system
+/// cannot yet speak to is left out rather than shown at low confidence.
+class _WeakAreas extends ConsumerWidget {
+  const _WeakAreas({required this.language});
+
+  final TargetLanguage language;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final areas = ref.watch(weakAreasProvider(language.code));
+
+    return areas.when(
+      loading: () =>
+          const LangoSkeleton(height: 120, radius: LangoRadius.xl),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (list) {
+        if (list.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Weak areas', style: LangoType.h3),
+              const Gap.md(),
+              LangoCard(
+                padding: const EdgeInsets.all(LangoSpace.lg),
+                child: Text(
+                  'Nothing stands out yet. We only call something a weak area '
+                  'once there are enough graded answers to be sure — a couple '
+                  'of wrong answers is not a pattern.',
+                  style: LangoType.bodyMuted,
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Weak areas', style: LangoType.h3),
+            const Gap.md(),
+            for (final area in list.take(5)) ...[
+              _WeakAreaRow(area: area, language: language),
+              const Gap.sm(),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _WeakAreaRow extends StatelessWidget {
+  const _WeakAreaRow({required this.area, required this.language});
+
+  final WeakArea area;
+  final TargetLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (area.kind) {
+      WeakAreaKind.grammar => Icons.menu_book_rounded,
+      WeakAreaKind.vocabulary => Icons.style_rounded,
+      WeakAreaKind.character => Icons.draw_rounded,
+      WeakAreaKind.skill => Icons.insights_rounded,
+    };
+
+    return LangoCard(
+      padding: const EdgeInsets.all(LangoSpace.lg),
+      semanticLabel: '${area.label}: '
+          '${area.correct} correct out of ${area.attempts}',
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: LangoColors.primaryDeep),
+          const SizedBox(width: LangoSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  area.label,
+                  style: area.kind == WeakAreaKind.grammar
+                      ? LangoType.native(language.code, size: 17)
+                      : LangoType.label,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${area.correct} of ${area.attempts} recent answers correct',
+                  style: LangoType.bodyMuted.copyWith(fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          Text('${(area.accuracy * 100).round()}%',
+              style: LangoType.label.copyWith(color: LangoColors.warning)),
+        ],
+      ),
+    );
+  }
 }

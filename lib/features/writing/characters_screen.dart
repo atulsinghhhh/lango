@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../models/content.dart';
@@ -8,24 +7,34 @@ import '../../models/language.dart';
 import '../../services/providers.dart';
 import '../../widgets/lango_page.dart';
 import '../../widgets/lango_states.dart';
+import 'character_set_screen.dart';
+import 'character_tile.dart';
 
 final charactersProvider = FutureProvider.autoDispose
     .family<List<CharacterItem>, String>((ref, language) async {
-  return ref.watch(contentServiceProvider).characters(language);
+  return ref.watch(contentServiceProvider).characters(language, limit: 500);
 });
 
+/// Script codes, as stored, to the heading a learner recognises. Unknown codes
+/// fall through to the raw code, so a new script still renders.
 const _scriptLabels = {
   'hangul_consonant': 'Consonants',
   'hangul_vowel': 'Vowels',
   'hiragana': 'Hiragana',
   'katakana': 'Katakana',
+  'kanji': 'Kanji',
 };
+
+/// Above this many characters a script gets a preview plus its own screen
+/// instead of a grid that buries everything under it (US-061: a kanji set is
+/// far larger than an alphabet).
+const _previewLimit = 24;
 
 /// Writing system browser (REDESIGN.md §16, §17).
 ///
 /// The character is visually prioritised — it fills its tile in the native
-/// face, with the romanisation as a small tracked caption beneath. Scripts are
-/// grouped (consonants/vowels for Hangul; hiragana/katakana for Japanese).
+/// face, with a small tracked caption beneath. Scripts are grouped, and each
+/// group is read from the data rather than assumed per language.
 class CharactersScreen extends ConsumerWidget {
   const CharactersScreen({super.key, required this.language});
 
@@ -34,11 +43,10 @@ class CharactersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chars = ref.watch(charactersProvider(language.code));
-    final title = language == TargetLanguage.korean ? 'Hangul' : 'Kana';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: const Text('Writing'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: LangoSpace.md),
@@ -95,30 +103,11 @@ class CharactersScreen extends ConsumerWidget {
                   ),
                   children: [
                     for (final entry in byScript.entries) ...[
-                      Text(
-                        (_scriptLabels[entry.key] ?? entry.key).toUpperCase(),
-                        style: LangoType.caption,
-                      ),
-                      const Gap.md(),
-                      LayoutBuilder(
-                        builder: (context, c) {
-                          final columns =
-                              (c.maxWidth / 92).floor().clamp(3, 8);
-                          return GridView.count(
-                            crossAxisCount: columns,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            mainAxisSpacing: LangoSpace.sm,
-                            crossAxisSpacing: LangoSpace.sm,
-                            children: [
-                              for (final ch in entry.value)
-                                _CharacterTile(
-                                  item: ch,
-                                  language: language,
-                                ),
-                            ],
-                          );
-                        },
+                      _ScriptSection(
+                        script: entry.key,
+                        title: _scriptLabels[entry.key] ?? entry.key,
+                        characters: entry.value,
+                        language: language,
                       ),
                       const Gap.xxl(),
                     ],
@@ -133,45 +122,69 @@ class CharactersScreen extends ConsumerWidget {
   }
 }
 
-class _CharacterTile extends StatelessWidget {
-  const _CharacterTile({required this.item, required this.language});
+class _ScriptSection extends StatelessWidget {
+  const _ScriptSection({
+    required this.script,
+    required this.title,
+    required this.characters,
+    required this.language,
+  });
 
-  final CharacterItem item;
+  final String script;
+  final String title;
+  final List<CharacterItem> characters;
   final TargetLanguage language;
 
   @override
   Widget build(BuildContext context) {
-    final tint = LangoColors.tintFor(item.character);
+    final truncated = characters.length > _previewLimit;
+    final shown =
+        truncated ? characters.take(_previewLimit).toList() : characters;
 
-    return Semantics(
-      button: true,
-      label: '${item.character}, ${item.romanization}',
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: LangoRadius.lgAll,
-        child: InkWell(
-          borderRadius: LangoRadius.lgAll,
-          onTap: () => context.push('/learn/writing/practice', extra: item),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: LangoRadius.lgAll,
-              gradient: tint.gradient,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  item.character,
-                  style: LangoType.native(language.code, size: 30),
-                ),
-                const SizedBox(height: 2),
-                Text(item.romanization.toUpperCase(),
-                    style: LangoType.caption.copyWith(fontSize: 11)),
-              ],
-            ),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+                child: Text(title.toUpperCase(), style: LangoType.caption)),
+            if (truncated)
+              Text('${characters.length}', style: LangoType.caption),
+          ],
         ),
-      ),
+        const Gap.md(),
+        LayoutBuilder(
+          builder: (context, c) {
+            final columns = (c.maxWidth / 92).floor().clamp(3, 8);
+            return GridView.count(
+              crossAxisCount: columns,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: LangoSpace.sm,
+              crossAxisSpacing: LangoSpace.sm,
+              children: [
+                for (final item in shown)
+                  CharacterTile(item: item, language: language),
+              ],
+            );
+          },
+        ),
+        if (truncated) ...[
+          const Gap.md(),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CharacterSetScreen(
+                  language: language,
+                  script: script,
+                  title: title,
+                ),
+              ),
+            ),
+            child: Text('See all ${characters.length} $title'),
+          ),
+        ],
+      ],
     );
   }
 }

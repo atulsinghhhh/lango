@@ -11,11 +11,13 @@ import '../../widgets/lango_page.dart';
 import '../../widgets/lango_states.dart';
 import '../../widgets/language_switcher.dart';
 
-/// Profile (REDESIGN.md §10, §31).
+/// Profile and preferences (REDESIGN.md §10, §31; US-006, US-150).
 ///
-/// Grouped into identity → learning setup → account, so settings read as a
-/// short page rather than an undifferentiated list of tiles. Each language the
-/// learner studies gets its own row in its own script (§12).
+/// Every learning preference is editable here: which languages, the level and
+/// goals for each, and the daily goal. Changes take effect on the next
+/// recommendation, and none of them touch recorded history — US-150 is
+/// explicit that learning history is not deleted unless explicitly requested,
+/// so even removing a language leaves its reviews and sessions intact.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -29,8 +31,9 @@ class SettingsScreen extends ConsumerWidget {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(maxWidth: LangoBreak.maxContentWidth),
+            constraints: const BoxConstraints(
+              maxWidth: LangoBreak.maxContentWidth,
+            ),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                 LangoSpace.gutter,
@@ -42,8 +45,8 @@ class SettingsScreen extends ConsumerWidget {
                 _Identity(email: email),
                 const Gap.xxl(),
                 profile.when(
-                  loading: () => const LangoSkeleton(
-                      height: 200, radius: LangoRadius.xl),
+                  loading: () =>
+                      const LangoSkeleton(height: 200, radius: LangoRadius.xl),
                   error: (e, _) => LangoError(
                     message: "We couldn't load your settings.",
                     onRetry: () => ref.invalidate(profileProvider),
@@ -91,8 +94,11 @@ class _Identity extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: LangoColors.tints.first.gradient,
           ),
-          child: const Icon(Icons.person_rounded,
-              size: 40, color: LangoColors.primaryDeep),
+          child: const Icon(
+            Icons.person_rounded,
+            size: 40,
+            color: LangoColors.primaryDeep,
+          ),
         ),
         if (email != null) ...[
           const Gap.md(),
@@ -115,86 +121,310 @@ class _LearningSetup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final studied = profile.languages.map((l) => l.language).toSet();
+    final available = TargetLanguage.values
+        .where((l) => !studied.contains(l))
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('LEARNING', style: LangoType.caption),
         const Gap.md(),
 
-        // One row per language, each in its own script.
         for (final ul in profile.languages) ...[
-          _LanguageRow(userLanguage: ul),
+          _LanguageCard(
+            userLanguage: ul,
+            // Removing the last language would leave the app with nothing to
+            // teach, so the option is withheld rather than shown and refused.
+            canRemove: profile.languages.length > 1,
+          ),
+          const Gap.md(),
+        ],
+
+        for (final language in available) ...[
+          _AddLanguageRow(language: language),
           const Gap.sm(),
         ],
 
-        InkWell(
-          onTap: () => context.push('/onboarding'),
-          borderRadius: LangoRadius.mdAll,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: LangoSpace.sm,
-              horizontal: LangoSpace.xs,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.tune_rounded,
-                    size: 18, color: LangoColors.primary),
-                const SizedBox(width: LangoSpace.xs),
-                Text('Change languages & levels',
-                    style: LangoType.label
-                        .copyWith(color: LangoColors.primary)),
-              ],
-            ),
-          ),
-        ),
-
         const Gap.lg(),
         _DailyGoalRow(current: profile.dailyGoalMinutes),
+        const Gap.md(),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.shield_outlined,
+              size: 16,
+              color: LangoColors.foregroundMuted,
+            ),
+            const SizedBox(width: LangoSpace.xxs),
+            Expanded(
+              child: Text(
+                'Changing any of this affects what we recommend next. Your '
+                'reviews, sessions and history are never deleted by a change '
+                'here — including removing a language.',
+                style: LangoType.bodyMuted.copyWith(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 }
 
-class _LanguageRow extends StatelessWidget {
-  const _LanguageRow({required this.userLanguage});
+/// One studied language, with everything about it editable in place (US-150).
+class _LanguageCard extends ConsumerStatefulWidget {
+  const _LanguageCard({required this.userLanguage, required this.canRemove});
 
   final UserLanguage userLanguage;
+  final bool canRemove;
+
+  @override
+  ConsumerState<_LanguageCard> createState() => _LanguageCardState();
+}
+
+class _LanguageCardState extends ConsumerState<_LanguageCard> {
+  bool _expanded = false;
+  bool _saving = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await action();
+      ref.invalidate(profileProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("We couldn't save that change.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _confirmRemove() async {
+    final language = widget.userLanguage.language;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Stop studying ${language.label}?'),
+        content: const Text(
+          'It disappears from your learning screens. Everything you have '
+          'already studied is kept, so adding it back later picks up where '
+          'you left off.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Stop studying'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _run(() => ref.read(profileServiceProvider).removeLanguage(language));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final lang = userLanguage.language;
+    final ul = widget.userLanguage;
+    final lang = ul.language;
 
     return LangoCard.tinted(
-      tint: lang == TargetLanguage.korean
-          ? LangoColors.tints[0]
-          : LangoColors.tints[3],
+      tint: LangoColors.tintFor(lang.code),
       padding: const EdgeInsets.all(LangoSpace.lg),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(lang.flag, style: const TextStyle(fontSize: 24)),
-          const SizedBox(width: LangoSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            children: [
+              Text(lang.flag, style: const TextStyle(fontSize: 24)),
+              const SizedBox(width: LangoSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lang.endonym,
+                      style: LangoType.native(lang.code, size: 22),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(lang.label.toUpperCase(), style: LangoType.caption),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                ),
+                tooltip: _expanded ? 'Hide settings' : 'Edit level and goals',
+                onPressed: () => setState(() => _expanded = !_expanded),
+              ),
+            ],
+          ),
+          if (!_expanded) ...[
+            const Gap.xs(),
+            Text(
+              ul.goals.isEmpty
+                  ? ul.level.label
+                  : '${ul.level.label} · ${ul.goals.join(', ')}',
+              style: LangoType.bodyMuted.copyWith(fontSize: 14),
+            ),
+          ],
+          if (_expanded) ...[
+            const Gap.lg(),
+            Text('LEVEL', style: LangoType.caption),
+            const Gap.xs(),
+            Wrap(
+              spacing: LangoSpace.xs,
+              runSpacing: LangoSpace.xs,
               children: [
-                Text(lang.endonym,
-                    style: LangoType.native(lang.code, size: 22)),
-                const SizedBox(height: 2),
-                Text(lang.label.toUpperCase(), style: LangoType.caption),
+                for (final level in ProficiencyLevel.values)
+                  ChoiceChip(
+                    label: Text(level.label),
+                    selected: level == ul.level,
+                    onSelected: _saving
+                        ? null
+                        : (_) {
+                            if (level == ul.level) return;
+                            _run(
+                              () => ref
+                                  .read(profileServiceProvider)
+                                  .updateLevel(lang, level),
+                            );
+                          },
+                  ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: LangoSpace.sm, vertical: 6),
-            decoration: const BoxDecoration(
-              color: LangoPalette.white,
-              borderRadius: LangoRadius.pillAll,
+            const Gap.lg(),
+            // US-006: goals are chosen at onboarding and changeable here.
+            Text('GOALS', style: LangoType.caption),
+            const Gap.xs(),
+            Wrap(
+              spacing: LangoSpace.xs,
+              runSpacing: LangoSpace.xs,
+              children: [
+                for (final goal in learningGoals)
+                  FilterChip(
+                    label: Text(goal),
+                    selected: ul.goals.contains(goal),
+                    onSelected: _saving
+                        ? null
+                        : (selected) {
+                            final goals = [...ul.goals];
+                            selected ? goals.add(goal) : goals.remove(goal);
+                            _run(
+                              () => ref
+                                  .read(profileServiceProvider)
+                                  .updateGoals(lang, goals),
+                            );
+                          },
+                  ),
+              ],
             ),
-            child: Text(userLanguage.level.label,
-                style: LangoType.caption
-                    .copyWith(color: LangoColors.foregroundSecondary)),
+            if (widget.canRemove) ...[
+              const Gap.lg(),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(
+                    Icons.remove_circle_outline_rounded,
+                    size: 18,
+                  ),
+                  label: Text('Stop studying ${lang.label}'),
+                  onPressed: _saving ? null : _confirmRemove,
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AddLanguageRow extends ConsumerStatefulWidget {
+  const _AddLanguageRow({required this.language});
+
+  final TargetLanguage language;
+
+  @override
+  ConsumerState<_AddLanguageRow> createState() => _AddLanguageRowState();
+}
+
+class _AddLanguageRowState extends ConsumerState<_AddLanguageRow> {
+  bool _saving = false;
+
+  Future<void> _add() async {
+    final level = await showModalBottomSheet<ProficiencyLevel>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(LangoSpace.lg),
+              child: Text(
+                'How much ${widget.language.label} do you already know?',
+                style: LangoType.h3,
+              ),
+            ),
+            for (final level in ProficiencyLevel.values)
+              ListTile(
+                title: Text(level.label),
+                onTap: () => Navigator.of(context).pop(level),
+              ),
+            const Gap.md(),
+          ],
+        ),
+      ),
+    );
+    if (level == null || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(profileServiceProvider)
+          .addLanguage(widget.language, level);
+      ref.invalidate(profileProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("We couldn't add that language.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LangoCard(
+      padding: const EdgeInsets.all(LangoSpace.md),
+      onTap: _saving ? null : _add,
+      semanticLabel: 'Also study ${widget.language.label}',
+      child: Row(
+        children: [
+          const Icon(Icons.add_rounded, size: 20, color: LangoColors.primary),
+          const SizedBox(width: LangoSpace.sm),
+          Expanded(
+            child: Text(
+              'Also study ${widget.language.label}',
+              style: LangoType.label.copyWith(color: LangoColors.primary),
+            ),
           ),
+          Text(widget.language.flag, style: const TextStyle(fontSize: 18)),
         ],
       ),
     );
@@ -213,13 +443,19 @@ class _DailyGoalRow extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.timer_outlined,
-                size: 20, color: LangoColors.primaryDeep),
+            const Icon(
+              Icons.timer_outlined,
+              size: 20,
+              color: LangoColors.primaryDeep,
+            ),
             const SizedBox(width: LangoSpace.xs),
             Expanded(child: Text('Daily goal', style: LangoType.label)),
-            Text('$current min',
-                style: LangoType.label
-                    .copyWith(color: LangoColors.foregroundMuted)),
+            Text(
+              '$current min',
+              style: LangoType.label.copyWith(
+                color: LangoColors.foregroundMuted,
+              ),
+            ),
           ],
         ),
         const Gap.sm(),

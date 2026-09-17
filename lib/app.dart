@@ -8,25 +8,34 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
+import 'features/compare/compare_detail_screen.dart';
+import 'features/compare/compare_screen.dart';
 import 'features/dashboard/home_gate.dart';
 import 'features/learn/learn_hub_screen.dart';
 import 'features/shell/app_shell.dart';
 import 'features/speaking/speaking_screen.dart';
+import 'features/tutor/tutor_chat_screen.dart';
 import 'features/tutor/tutor_screen.dart';
 import 'features/grammar/grammar_detail_screen.dart';
 import 'features/grammar/grammar_list_screen.dart';
+import 'features/listening/dictation_screen.dart';
 import 'features/listening/listening_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/progress/history_screen.dart';
 import 'features/progress/progress_screen.dart';
 import 'features/review/review_screen.dart';
+import 'features/search/search_screen.dart';
 import 'features/session/session_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/vocabulary/exercise_screen.dart';
 import 'features/vocabulary/flashcard_screen.dart';
 import 'features/vocabulary/vocab_list_screen.dart';
+import 'features/writing/character_detail_screen.dart';
 import 'features/writing/character_practice_screen.dart';
 import 'features/writing/characters_screen.dart';
+import 'models/comparison.dart';
 import 'models/language.dart';
+import 'models/tutor.dart';
 
 class LangoApp extends ConsumerWidget {
   const LangoApp({super.key});
@@ -87,6 +96,14 @@ final _routerProvider = Provider<GoRouter>((ref) {
                   path: 'writing',
                   builder: (_, state) => CharactersScreen(language: _lang(state)),
                 ),
+                GoRoute(
+                  path: 'search',
+                  builder: (_, state) => SearchScreen(language: _lang(state)),
+                ),
+                GoRoute(
+                  path: 'compare',
+                  builder: (_, _) => const CompareScreen(),
+                ),
               ],
             ),
           ]),
@@ -128,8 +145,17 @@ final _routerProvider = Provider<GoRouter>((ref) {
             CharacterPracticeScreen(character: state.extra as dynamic),
       ),
       GoRoute(
+        path: '/learn/writing/character',
+        builder: (_, state) =>
+            CharacterDetailScreen(character: state.extra as dynamic),
+      ),
+      GoRoute(
         path: '/learn/listening',
         builder: (_, state) => ListeningScreen(language: _lang(state)),
+      ),
+      GoRoute(
+        path: '/learn/dictation',
+        builder: (_, state) => DictationScreen(language: _lang(state)),
       ),
       GoRoute(
         path: '/speaking',
@@ -138,6 +164,20 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/session',
         builder: (_, state) => SessionScreen(language: _lang(state)),
+      ),
+      GoRoute(
+        path: '/tutor/chat',
+        builder: (_, state) =>
+            TutorChatScreen(conversation: state.extra as TutorConversation),
+      ),
+      GoRoute(
+        path: '/compare/detail',
+        builder: (_, state) =>
+            CompareDetailScreen(concept: state.extra as Concept),
+      ),
+      GoRoute(
+        path: '/progress/history',
+        builder: (_, state) => HistoryScreen(language: _lang(state)),
       ),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     ],

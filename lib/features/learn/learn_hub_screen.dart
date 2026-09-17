@@ -39,6 +39,13 @@ class LearnHubScreen extends ConsumerWidget {
 
     return LangoPage(
       title: 'Learn',
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search_rounded),
+          tooltip: 'Search',
+          onPressed: () => context.push('/learn/search?lang=${lang.code}'),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -54,6 +61,22 @@ class LearnHubScreen extends ConsumerWidget {
           for (var i = 0; i < skills.length; i++) ...[
             _SkillCard(skill: skills[i], language: lang, index: i),
             if (i != skills.length - 1) const Gap.card(),
+          ],
+
+          // Comparison only makes sense with a second language to compare
+          // against, so it appears when there is one and not before (US-120).
+          if (languages.length > 1) ...[
+            const Gap.card(),
+            _SkillCard(
+              skill: const _Skill(
+                'Compare languages',
+                'The same idea, side by side',
+                Icons.compare_arrows_rounded,
+                '/learn/compare',
+              ),
+              language: lang,
+              index: skills.length,
+            ),
           ],
           const Gap.xl(),
         ],
@@ -73,6 +96,8 @@ class LearnHubScreen extends ConsumerWidget {
           Icons.draw_rounded, '/learn/writing'),
       _Skill('Listening', 'Train your ear on spoken words',
           Icons.headphones_rounded, '/learn/listening'),
+      _Skill('Dictation', 'Type what you hear', Icons.keyboard_rounded,
+          '/learn/dictation'),
       _Skill('Speaking', 'Say it out loud', Icons.mic_rounded, '/speaking'),
     ];
   }

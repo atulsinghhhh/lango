@@ -1,16 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/env.dart';
+import '../models/insights.dart';
 import '../models/language.dart';
 import '../models/profile.dart';
+import '../models/user_item.dart';
 import 'auth_service.dart';
+import 'comparison_service.dart';
 import 'content_service.dart';
+import 'history_service.dart';
+import 'insights_service.dart';
 import 'profile_service.dart';
 import 'progress_service.dart';
+import 'recommend/recommendation_engine.dart';
 import 'review_service.dart';
+import 'search_service.dart';
 import 'session_service.dart';
+import 'speaking_service.dart';
+import 'speech_service.dart';
 import 'srs/srs_engine.dart';
+import 'tts/tts_api_client.dart';
 import 'tts_service.dart';
+import 'tutor_service.dart';
 
 final supabaseProvider =
     Provider<SupabaseClient>((ref) => Supabase.instance.client);
@@ -35,7 +47,44 @@ final sessionServiceProvider =
 final progressServiceProvider =
     Provider((ref) => ProgressService(ref.watch(supabaseProvider)));
 
-final ttsServiceProvider = Provider((ref) => TtsService());
+/// Speech playback, backed by the Lango TTS service with an on-device
+/// fallback. Disposed with the container so the audio player is released.
+final ttsServiceProvider = Provider<TtsService>((ref) {
+  final service = TtsService(
+    api: TtsApiClient(
+      baseUrl: Env.ttsApiBaseUrl,
+      accessToken: () =>
+          ref.read(supabaseProvider).auth.currentSession?.accessToken,
+    ),
+  );
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final searchServiceProvider =
+    Provider((ref) => SearchService(ref.watch(supabaseProvider)));
+
+final insightsServiceProvider =
+    Provider((ref) => InsightsService(ref.watch(supabaseProvider)));
+
+final historyServiceProvider =
+    Provider((ref) => HistoryService(ref.watch(supabaseProvider)));
+
+final comparisonServiceProvider =
+    Provider((ref) => ComparisonService(ref.watch(supabaseProvider)));
+
+final speakingServiceProvider =
+    Provider((ref) => SpeakingService(ref.watch(supabaseProvider)));
+
+final tutorServiceProvider =
+    Provider((ref) => TutorService(ref.watch(supabaseProvider)));
+
+/// One recogniser for the app: the platform allows a single listen session at
+/// a time, and a per-screen instance would fight over the microphone.
+final speechServiceProvider = Provider((ref) => SpeechService());
+
+final recommendationEngineProvider =
+    Provider((ref) => const RecommendationEngine());
 
 /// Current profile incl. selected languages. Invalidate after onboarding or
 /// settings changes.
@@ -71,4 +120,72 @@ final effectiveLanguageProvider = Provider<TargetLanguage?>((ref) {
   final profile = ref.watch(profileProvider).value;
   final langs = profile?.languages ?? const [];
   return langs.isEmpty ? null : langs.first.language;
+});
+
+
+/// Weak areas for a language (US-100).
+final weakAreasProvider =
+    FutureProvider.autoDispose.family<List<WeakArea>, String>(
+        (ref, language) async {
+  return ref.watch(insightsServiceProvider).weakAreas(language);
+});
+
+/// Everything the recommendation engine is allowed to see, assembled from
+/// recorded data (US-101).
+final learnerSnapshotProvider =
+    FutureProvider.autoDispose.family<LearnerSnapshot, String>(
+        (ref, language) async {
+  final profile = await ref.watch(profileProvider.future);
+  final target = TargetLanguage.fromCode(language);
+  final userLanguage = profile?.languages
+      .cast<UserLanguage?>()
+      .firstWhere((l) => l?.language == target, orElse: () => null);
+
+  final reviews = ref.watch(reviewServiceProvider);
+  final content = ref.watch(contentServiceProvider);
+  final sessions = ref.watch(sessionServiceProvider);
+  final insights = ref.watch(insightsServiceProvider);
+
+  final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+
+  final results = await Future.wait([
+    reviews.dueCount(language: language),
+    content.vocabularyCount(language),
+    content.charactersCount(language),
+    reviews.statesFor(language),
+    sessions.secondsStudiedToday(),
+    ref.watch(weakAreasProvider(language).future),
+    insights.skillsPractisedSince(language, weekAgo),
+  ]);
+
+  final states = (results[3] as List).cast<UserItem>();
+  final trackedVocabulary =
+      states.where((s) => s.itemType == 'vocabulary').length;
+  final trackedCharacters =
+      states.where((s) => s.itemType == 'character').length;
+  final secondsToday = (results[4] as Map<String, int>)[language] ?? 0;
+  final vocabularyTotal = results[1] as int;
+
+  return LearnerSnapshot(
+    language: target,
+    level: userLanguage?.level ?? ProficiencyLevel.beginner,
+    goals: userLanguage?.goals ?? const [],
+    dueReviews: results[0] as int,
+    untrackedVocabulary:
+        (vocabularyTotal - trackedVocabulary).clamp(0, vocabularyTotal),
+    charactersTracked: trackedCharacters,
+    charactersAvailable: results[2] as int,
+    minutesStudiedToday: (secondsToday / 60).round(),
+    dailyGoalMinutes: profile?.dailyGoalMinutes ?? 10,
+    weakAreas: results[5] as List<WeakArea>,
+    skillsPractisedThisWeek: results[6] as Set<String>,
+  );
+});
+
+/// The single next activity to suggest (US-101).
+final recommendationProvider =
+    FutureProvider.autoDispose.family<Recommendation, String>(
+        (ref, language) async {
+  final snapshot = await ref.watch(learnerSnapshotProvider(language).future);
+  return ref.watch(recommendationEngineProvider).recommend(snapshot);
 });

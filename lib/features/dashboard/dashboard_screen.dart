@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../models/insights.dart';
 import '../../models/language.dart';
 import '../../models/profile.dart';
 import '../../services/providers.dart';
+import '../../services/recommend/recommendation_engine.dart';
 import '../../widgets/lango_card.dart';
 import '../../widgets/lango_page.dart';
 import '../../widgets/lango_states.dart';
@@ -184,10 +186,10 @@ class _DashboardBody extends StatelessWidget {
         _TodayCard(minutes: minutesToday, goal: goal, language: lang),
         const Gap.card(),
 
-        // 3. Recommended activity.
+        // 3. Recommended activity (US-101).
         Text('Recommended', style: LangoType.h3),
         const Gap.md(),
-        _RecommendationCard(language: lang, due: data.dueByLanguage[lang.code] ?? 0),
+        _RecommendationCard(language: lang),
       ],
     );
   }
@@ -305,64 +307,110 @@ class _TodayCard extends StatelessWidget {
   }
 }
 
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.language, required this.due});
+/// The single next activity, from [RecommendationEngine] (US-101).
+///
+/// The engine decides *what* to suggest and *why*; this widget only maps the
+/// activity to a route and renders it. The reason is always shown — a
+/// recommendation with no stated reason is indistinguishable from a guess.
+class _RecommendationCard extends ConsumerWidget {
+  const _RecommendationCard({required this.language});
 
   final TargetLanguage language;
-  final int due;
 
   @override
-  Widget build(BuildContext context) {
-    // Recommend the thing that is not already covered by the primary CTA.
-    final (title, sub, icon, route) = due > 0
-        ? (
-            'Learn new words',
-            'Add to your deck once reviews are clear',
-            Icons.style_rounded,
-            '/learn/flashcards?lang=${language.code}',
-          )
-        : (
-            'Practise listening',
-            'Train your ear on words you know',
-            Icons.headphones_rounded,
-            '/learn/listening?lang=${language.code}',
-          );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recommendation = ref.watch(recommendationProvider(language.code));
 
-    return LangoCard.tinted(
-      tint: LangoColors.tints[2],
-      onTap: () => context.push(route),
-      semanticLabel: '$title. $sub',
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: const BoxDecoration(
-              color: LangoPalette.white,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: LangoColors.primaryDeep, size: 24),
+    return recommendation.when(
+      loading: () =>
+          const LangoSkeleton(height: 108, radius: LangoRadius.xl),
+      // A missing recommendation is not worth an error state on the home
+      // screen: the primary action above it still works.
+      error: (_, _) => const SizedBox.shrink(),
+      data: (r) {
+        final (icon, route) = _target(r, language);
+        return LangoCard.tinted(
+          tint: LangoColors.tints[2],
+          onTap: () => context.push(route),
+          semanticLabel: '${r.title}. ${r.reason}',
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  color: LangoPalette.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: LangoColors.primaryDeep, size: 24),
+              ),
+              const SizedBox(width: LangoSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(r.title, style: LangoType.h3)),
+                        if (r.estimatedMinutes != null)
+                          Text('~${r.estimatedMinutes} min',
+                              style: LangoType.caption),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      r.reason,
+                      style: LangoType.body.copyWith(
+                        fontSize: 14,
+                        color: LangoColors.foregroundSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: LangoSpace.xs),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: LangoColors.primaryDeep, size: 22),
+            ],
           ),
-          const SizedBox(width: LangoSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title, style: LangoType.h3),
-                const SizedBox(height: 2),
-                Text(sub,
-                    style: LangoType.body.copyWith(
-                      fontSize: 14,
-                      color: LangoColors.foregroundSecondary,
-                    )),
-              ],
-            ),
-          ),
-          const Icon(Icons.arrow_forward_rounded,
-              color: LangoColors.primaryDeep, size: 22),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  /// Map an activity to where it lives. Targeted practice follows the kind of
+  /// thing the learner is getting wrong, so "practise 은/는" opens grammar and
+  /// "practise Listening" opens listening.
+  static (IconData, String) _target(Recommendation r, TargetLanguage lang) {
+    final q = '?lang=${lang.code}';
+    switch (r.activity) {
+      case RecommendedActivity.review:
+        return (Icons.replay_rounded, '/review$q');
+      case RecommendedActivity.writing:
+        return (Icons.draw_rounded, '/learn/writing$q');
+      case RecommendedActivity.session:
+        return (Icons.play_arrow_rounded, '/session$q');
+      case RecommendedActivity.newVocabulary:
+        return (Icons.style_rounded, '/learn/flashcards$q');
+      case RecommendedActivity.listening:
+        return (Icons.headphones_rounded, '/learn/listening$q');
+      case RecommendedActivity.speaking:
+        return (Icons.mic_rounded, '/speaking$q');
+      case RecommendedActivity.grammar:
+        return (Icons.menu_book_rounded, '/learn/grammar$q');
+      case RecommendedActivity.targetedPractice:
+        return switch (r.focus?.kind) {
+          WeakAreaKind.grammar => (Icons.menu_book_rounded, '/learn/grammar$q'),
+          WeakAreaKind.character => (Icons.draw_rounded, '/learn/writing$q'),
+          WeakAreaKind.skill when r.focus?.label == 'Listening' =>
+            (Icons.headphones_rounded, '/learn/listening$q'),
+          WeakAreaKind.skill when r.focus?.label == 'Dictation' =>
+            (Icons.keyboard_rounded, '/learn/dictation$q'),
+          WeakAreaKind.skill when r.focus?.label == 'Saying full sentences' =>
+            (Icons.mic_rounded, '/speaking$q'),
+          _ => (Icons.checklist_rounded, '/learn/exercises$q'),
+        };
+    }
   }
 }
