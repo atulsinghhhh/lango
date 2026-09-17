@@ -35,15 +35,15 @@ class ProgressService {
       _coverage(language, 'vocabulary', 'vocabulary'),
       _coverage(language, 'grammar', 'grammar_points'),
       _coverage(language, 'character', 'characters'),
-      _accuracy(language, 'listening_choice'),
+      _listening(language),
+      _speaking(language),
     ]);
     return LanguageProgress(language: language, skills: [
       SkillProgress(skill: 'Vocabulary', percent: results[0]),
       SkillProgress(skill: 'Grammar', percent: results[1]),
       SkillProgress(skill: 'Writing', percent: results[2]),
       SkillProgress(skill: 'Listening', percent: results[3]),
-      // Speaking is P1 — shown honestly as not yet practiced.
-      const SkillProgress(skill: 'Speaking', percent: 0),
+      SkillProgress(skill: 'Speaking', percent: results[4]),
     ]);
   }
 
@@ -68,18 +68,42 @@ class ProgressService {
     return (score / total).clamp(0.0, 1.0);
   }
 
-  /// Recent accuracy for a given exercise type (last 50 attempts).
-  Future<double> _accuracy(String language, String exerciseType) async {
+  /// Recent listening accuracy — both the multiple-choice drill and dictation
+  /// exercise the same skill, so both count toward it.
+  Future<double> _listening(String language) async {
     final rows = await _client
         .from('exercise_attempts')
         .select('correct')
         .eq('user_id', _uid)
         .eq('language', language)
-        .eq('exercise_type', exerciseType)
+        .inFilter('exercise_type', ['listening_choice', 'dictation'])
         .order('created_at', ascending: false)
         .limit(50);
     if (rows.isEmpty) return 0;
     final correct = rows.where((r) => r['correct'] == true).length;
     return correct / rows.length;
+  }
+
+  /// Recent speaking progress (US-080/081/110).
+  ///
+  /// Measured as the share of recent attempts whose transcript largely matched
+  /// the target sentence. That is a measure of attempts made and transcribed —
+  /// deliberately **not** a pronunciation score, which nothing here can
+  /// produce (CLAUDE.md invariant).
+  Future<double> _speaking(String language) async {
+    final rows = await _client
+        .from('speaking_attempts')
+        .select('match_ratio')
+        .eq('user_id', _uid)
+        .eq('language', language)
+        .order('created_at', ascending: false)
+        .limit(50);
+    if (rows.isEmpty) return 0;
+    var matched = 0;
+    for (final row in rows) {
+      final ratio = (row['match_ratio'] as num?)?.toDouble() ?? 0;
+      if (ratio >= 0.7) matched++;
+    }
+    return matched / rows.length;
   }
 }

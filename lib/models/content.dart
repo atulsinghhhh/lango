@@ -106,6 +106,9 @@ class CharacterItem {
     this.exampleTranslation,
     this.strokeCount,
     this.sortOrder = 0,
+    this.meanings = const [],
+    this.readings = const {},
+    this.levelLabel,
   });
 
   final String id;
@@ -116,8 +119,23 @@ class CharacterItem {
   final String? pronunciationHint;
   final String? exampleWord;
   final String? exampleTranslation;
+
+  /// Null unless we have a verified count — never estimated (CLAUDE.md).
   final int? strokeCount;
   final int sortOrder;
+
+  /// English meanings. Empty for alphabetic scripts, where [romanization]
+  /// already carries the sound and there is no meaning to give.
+  final List<String> meanings;
+
+  /// Reading groups keyed by reading type — `{'on': [...], 'kun': [...]}` for
+  /// kanji. Empty for scripts that have a single reading.
+  final Map<String, List<String>> readings;
+
+  /// Curriculum level, e.g. "JLPT N5". Null when the script is not levelled.
+  final String? levelLabel;
+
+  bool get isLogographic => meanings.isNotEmpty || readings.isNotEmpty;
 
   factory CharacterItem.fromJson(Map<String, dynamic> json) => CharacterItem(
         id: json['id'] as String,
@@ -130,5 +148,17 @@ class CharacterItem {
         exampleTranslation: json['example_translation'] as String?,
         strokeCount: (json['stroke_count'] as num?)?.toInt(),
         sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+        meanings: (json['meanings'] as List?)?.cast<String>() ?? const [],
+        readings: _readings(json['readings']),
+        levelLabel: json['level_label'] as String?,
       );
+
+  static Map<String, List<String>> _readings(Object? raw) {
+    if (raw is! Map) return const {};
+    return {
+      for (final entry in raw.entries)
+        if (entry.value is List)
+          entry.key as String: (entry.value as List).cast<String>(),
+    };
+  }
 }
